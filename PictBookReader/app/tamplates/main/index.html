@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1>{{ _('マイ絵本ライブラリ') }}</h1>
+    {% if current_user.is_admin %}
+    <a href="{{ url_for('admin.add_book') }}" class="btn btn-primary">
+        <i class="fas fa-plus"></i> {{ _('絵本を追加') }} </a>
+    {% endif %}
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-6">
+        <form method="GET" action="{{ url_for('main.index') }}" class="d-flex">
+            <input type="text" name="query" class="form-control me-2" placeholder="{{ _('絵本のタイトルを検索...') }}" value="{{ search_query }}">
+            <button type="submit" class="btn btn-outline-primary">{{ _('検索') }}</button>
+        </form>
+    </div>
+    <div class="col-md-6">
+        <div class="d-flex justify-content-md-end mt-3 mt-md-0">
+            <div class="btn-group"> <a href="{{ url_for('main.index') }}" class="btn btn-outline-primary {% if not selected_tag %}active{% endif %}">
+                    {{ _('すべて') }}
+                </a>
+                {% for tag in all_tags %}
+                <a href="{{ url_for('main.index', tag=tag) }}" class="btn btn-outline-primary {% if selected_tag == tag %}active{% endif %}"> {{ tag }}
+                </a>
+                {% endfor %}
+            </div>
+        </div> </div>
+</div>
+
+{% if books %}
+<div class="row row-cols-1 row-cols-sm-2 row-cols-md-3 row-cols-lg-4 g-4">
+    {% for book in books %}
+    <div class="col">
+        <div class="card h-100 book-card">
+            <a href="{{ url_for('main.book_detail', id=book.id) }}" class="text-decoration-none">
+                <img src="{{ url_for('static', filename=book.cover_path) }}" class="card-img-top book-cover" alt="{{ book.title }}">
+                <div class="card-body">
+                    <h5 class="card-title text-truncate">{{ book.title }}</h5> <div class="mt-2">
+                        {% for tag in book.tags %}
+                        <span class="badge bg-primary me-1">{{ tag }}</span> {% endfor %}
+                    </div>
+                </div>
+            </a>
+            <div class="card-footer bg-transparent">
+                <div class="d-grid"> <a href="{{ url_for('main.read_book', id=book.id) }}" class="btn btn-sm btn-outline-primary">
+                        {{ _('読む') }}
+                    </a>
+                </div>
+            </div> </div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="text-center my-5">
+    <h3>{{ _('絵本が見つかりません') }}</h3>
+    <p class="text-muted">{{ _('検索条件を変更するか、新しい絵本を追加してください。') }}</p>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block styles %}
+<style>
+    .book-card {
+        transition: transform 0.2s; /* [cite: 69] */
+    }
+    .book-card:hover {
+        transform: translateY(-5px); /* [cite: 70] */
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1); /* [cite: 70] */
+    }
+    .book-cover {
+        height: 250px; /* [cite: 71] */
+        object-fit: cover; /* [cite: 71] */
+    }
+</style>
+{% endblock %}

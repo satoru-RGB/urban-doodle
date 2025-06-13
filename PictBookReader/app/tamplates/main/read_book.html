@@ -1,0 +1,351 @@
+{% extends "base.html" %}
+
+{% block styles %}
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/pdfjs-viewer/3.11.174/pdf-viewer.min.css">
+<style>
+    body, html {
+        height: 100%; /* [cite: 81] */
+        overflow: hidden; /* [cite: 81] */
+    }
+    
+    .container-fluid {
+        max-width: 100%; /* [cite: 82] */
+        height: calc(100vh - 56px); /* [cite: 82] */
+        padding: 0; /* [cite: 82] */
+    }
+    
+    #pdfContainer {
+        width: 100%; /* [cite: 83] */
+        height: 100%; /* [cite: 83] */
+        overflow: hidden; /* [cite: 83] */
+        position: relative; /* [cite: 83] */
+    }
+    
+    #canvasContainer {
+        width: 100%; /* [cite: 84] */
+        height: 100%; /* [cite: 84] */
+        overflow: auto; /* [cite: 84] */
+        text-align: center; /* [cite: 84] */
+    }
+    
+    #pdfCanvas {
+        margin: 0 auto; /* [cite: 85] */
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.3); /* [cite: 85] */
+    }
+    
+    .pdf-controls {
+        position: fixed; /* [cite: 86] */
+        bottom: 20px; /* [cite: 86] */
+        left: 50%; /* [cite: 86] */
+        transform: translateX(-50%); /* [cite: 86] */
+        background-color: rgba(255, 255, 255, 0.8); /* [cite: 86] */
+        padding: 10px 15px; /* [cite: 86] */
+        border-radius: 30px; /* [cite: 87] */
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2); /* [cite: 87] */
+        z-index: 1000; /* [cite: 87] */
+        display: flex; /* [cite: 87] */
+        align-items: center; /* [cite: 87] */
+    }
+    
+    .bookmark-button {
+        position: fixed; /* [cite: 88] */
+        top: 80px; /* [cite: 89] */
+        right: 20px; /* [cite: 89] */
+        z-index: 1000; /* [cite: 89] */
+    }
+    
+    .bookmark-panel {
+        position: fixed; /* [cite: 89] */
+        top: 80px; /* [cite: 90] */
+        right: 20px; /* [cite: 90] */
+        width: 300px; /* [cite: 90] */
+        max-height: 80vh; /* [cite: 90] */
+        overflow-y: auto; /* [cite: 90] */
+        z-index: 1000; /* [cite: 90] */
+        background-color: white; /* [cite: 90] */
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2); /* [cite: 91] */
+        border-radius: 5px; /* [cite: 91] */
+        display: none; /* [cite: 91] */
+    }
+    
+    .page-info {
+        margin: 0 15px; /* [cite: 93] */
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div id="pdfContainer">
+        <div id="canvasContainer">
+            <canvas id="pdfCanvas"></canvas>
+        </div>
+    </div>
+    
+    <button class="btn btn-light rounded-circle bookmark-button" id="toggleBookmark" title="{{ _('ブックマークパネルを開閉') }}">
+        <i class="fas fa-bookmark"></i>
+    </button>
+    
+    <div class="bookmark-panel card" id="bookmarkPanel">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">{{ _('ブックマーク') }}</h5> <button type="button" class="btn-close" id="closeBookmarkPanel" aria-label="{{ _('閉じる') }}"></button>
+        </div>
+        <div class="card-body">
+            <div id="bookmarkList" class="list-group list-group-flush">
+                </div>
+            
+            <div class="mt-3"> <div class="d-flex mb-2 align-items-center">
+                    <h6 class="mb-0">{{ _('現在のページ') }}: <span id="currentPageBookmark"></span></h6>
+                    <div class="ms-auto" id="currentPageBookmarkStatus"></div>
+                </div>
+                
+                <div class="mb-2"> <label for="bookmarkNote" class="form-label">{{ _('メモ') }}</label>
+                    <textarea class="form-control" id="bookmarkNote" rows="2"></textarea>
+                </div>
+                
+                <div class="d-flex"> <button id="addBookmark" class="btn btn-primary btn-sm me-2"
+                            data-text-add="{{ _('ブックマークを追加') }}"
+                            data-text-update="{{ _('更新') }}">{{ _('ブックマークを追加') }}</button>
+                    <button id="removeBookmark" class="btn btn-outline-danger btn-sm">{{ _('削除') }}</button>
+                </div>
+            </div>
+        </div> </div>
+    
+    <div class="pdf-controls">
+        <button class="btn btn-light" id="prevPage" title="{{ _('前のページ') }}">
+            <i class="fas fa-chevron-left"></i>
+        </button>
+        <div class="page-info">
+            <span id="currentPage">0</span> / <span id="totalPages">0</span>
+        </div>
+        <button class="btn btn-light" id="nextPage" title="{{ _('次のページ') }}">
+            <i class="fas fa-chevron-right"></i> </button>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/js/all.min.js"></script> <script>
+    const pdfUrl = "{{ url_for('static', filename=book.pdf_path) }}"; /* [cite: 99] */
+    const bookId = "{{ book.id }}"; /* [cite: 100] */
+    let pdfDoc = null,
+        currentPage = 1,
+        totalPages = 0,
+        pageRendering = false,
+        pageNumPending = null,
+        scale = 1.5,
+        canvas = document.getElementById('pdfCanvas'),
+        ctx = canvas.getContext('2d'),
+        bookmarks = []; /* [cite: 100] */
+
+    const translations = {
+        noBookmarks: "{{ _('ブックマークはありません') }}",
+        bookmarked: "{{ _('ブックマーク済み') }}"
+    };
+
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'; /* [cite: 101] */
+
+    function renderPage(num) {
+        pageRendering = true; /* [cite: 101] */
+        document.getElementById('currentPage').textContent = num; /* [cite: 102] */
+        document.getElementById('currentPageBookmark').textContent = num;
+        
+        pdfDoc.getPage(num).then(page => {
+            const viewport = page.getViewport({ scale });
+            canvas.height = viewport.height;
+            canvas.width = viewport.width;
+            
+            const renderContext = {
+                canvasContext: ctx,
+                viewport: viewport /* [cite: 103] */
+            };
+            
+            const renderTask = page.render(renderContext);
+            
+            renderTask.promise.then(() => {
+                pageRendering = false; /* [cite: 104] */
+                if (pageNumPending !== null) {
+                    renderPage(pageNumPending);
+                    pageNumPending = null;
+                }
+                
+                fetch(`/api/book/${bookId}/last-page`, { /* [cite: 105] */
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }, /* [cite: 106] */
+                    body: JSON.stringify({ page: num })
+                });
+                updateBookmarkStatus(num); /* [cite: 107] */
+            }); /* [cite: 108] */
+        });
+    }
+
+    function queueRenderPage(num) {
+        if (pageRendering) {
+            pageNumPending = num; /* [cite: 109] */
+        } else {
+            renderPage(num); /* [cite: 109] */
+        }
+    }
+
+    function onPrevPage() {
+        if (currentPage <= 1) return; /* [cite: 110] */
+        currentPage--; /* [cite: 111] */
+        queueRenderPage(currentPage);
+    }
+
+    function onNextPage() {
+        if (currentPage >= totalPages) return; /* [cite: 111] */
+        currentPage++; /* [cite: 112] */
+        queueRenderPage(currentPage);
+    }
+
+    pdfjsLib.getDocument(pdfUrl).promise.then(pdf => {
+        pdfDoc = pdf;
+        totalPages = pdf.numPages;
+        document.getElementById('totalPages').textContent = totalPages;
+        
+        const lastPage = {{ book.last_read_page or 1 }};
+        currentPage = lastPage;
+        
+        renderPage(currentPage); /* [cite: 113] */
+        loadBookmarks();
+    });
+    document.getElementById('prevPage').addEventListener('click', onPrevPage); /* [cite: 114] */
+    document.getElementById('nextPage').addEventListener('click', onNextPage);
+    
+    const toggleBookmarkBtn = document.getElementById('toggleBookmark');
+    const bookmarkPanel = document.getElementById('bookmarkPanel'); /* [cite: 114] */
+    const closeBookmarkBtn = document.getElementById('closeBookmarkPanel'); /* [cite: 115] */
+    const addBookmarkBtn = document.getElementById('addBookmark');
+    const removeBookmarkBtn = document.getElementById('removeBookmark');
+    const bookmarkNoteInput = document.getElementById('bookmarkNote');
+    const bookmarkStatusEl = document.getElementById('currentPageBookmarkStatus'); /* [cite: 115] */
+
+    toggleBookmarkBtn.addEventListener('click', () => { /* [cite: 116] */
+        if (bookmarkPanel.style.display === 'block') {
+            bookmarkPanel.style.display = 'none';
+        } else {
+            bookmarkPanel.style.display = 'block';
+            updateBookmarkStatus(currentPage);
+        }
+    });
+    closeBookmarkBtn.addEventListener('click', () => { /* [cite: 117] */
+        bookmarkPanel.style.display = 'none';
+    });
+    function loadBookmarks() { /* [cite: 118] */
+        fetch(`/api/book/${bookId}/bookmarks`)
+            .then(response => response.json())
+            .then(data => {
+                bookmarks = data;
+                renderBookmarkList();
+                updateBookmarkStatus(currentPage);
+            }); /* [cite: 119] */
+    }
+    
+    function renderBookmarkList() {
+        const bookmarkList = document.getElementById('bookmarkList'); /* [cite: 119] */
+        bookmarkList.innerHTML = ''; /* [cite: 120] */
+        
+        if (bookmarks.length === 0) {
+            bookmarkList.innerHTML = `<div class="text-center text-muted py-3">${translations.noBookmarks}</div>`; /* [cite: 120] */
+            return; /* [cite: 121] */
+        }
+        
+        bookmarks.sort((a, b) => a.page - b.page); /* [cite: 121] */
+        bookmarks.forEach(bookmark => { /* [cite: 122] */
+            const item = document.createElement('a');
+            item.href = '#';
+            item.className = 'list-group-item list-group-item-action';
+            item.innerHTML = `
+                <div class="d-flex w-100 justify-content-between">
+                    <h6 class="mb-1">{{ _('ページ %(page_num)s', page_num='${bookmark.page}') }}</h6> </div>
+                ${bookmark.note ? `<p class="mb-1 small text-muted">${bookmark.note}</p>` : ''}
+            `;
+            
+            item.addEventListener('click', (e) => {
+                e.preventDefault();
+                currentPage = bookmark.page; /* [cite: 124] */
+                queueRenderPage(currentPage);
+            });
+            
+            bookmarkList.appendChild(item);
+        }); /* [cite: 125] */
+    }
+    
+    function updateBookmarkStatus(page) {
+        const bookmark = bookmarks.find(b => b.page === page); /* [cite: 125] */
+        if (bookmark) { /* [cite: 126] */
+            bookmarkStatusEl.innerHTML = `<span class="badge bg-success">${translations.bookmarked}</span>`; /* [cite: 126] */
+            bookmarkNoteInput.value = bookmark.note || ''; /* [cite: 127] */
+            removeBookmarkBtn.disabled = false;
+            addBookmarkBtn.textContent = addBookmarkBtn.dataset.textUpdate; /* [cite: 127] */
+        } else {
+            bookmarkStatusEl.innerHTML = ''; /* [cite: 128] */
+            bookmarkNoteInput.value = ''; /* [cite: 128] */
+            removeBookmarkBtn.disabled = true; /* [cite: 129] */
+            addBookmarkBtn.textContent = addBookmarkBtn.dataset.textAdd; /* [cite: 129] */
+        }
+    }
+    
+    addBookmarkBtn.addEventListener('click', () => {
+        const note = bookmarkNoteInput.value.trim();
+        
+        fetch(`/api/book/${bookId}/bookmark`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            }, /* [cite: 130] */
+            body: JSON.stringify({
+                page: currentPage,
+                note: note
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) { /* [cite: 131] */
+                loadBookmarks();
+            }
+        });
+    });
+    removeBookmarkBtn.addEventListener('click', () => { /* [cite: 132] */
+        fetch(`/api/book/${bookId}/bookmark`, {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                page: currentPage
+            }) /* [cite: 133] */
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                loadBookmarks();
+            }
+        });
+    });
+    document.addEventListener('keydown', (e) => { /* [cite: 134] */
+        if (e.code === 'ArrowLeft') {
+            onPrevPage();
+        } else if (e.code === 'ArrowRight') {
+            onNextPage();
+        }
+    });
+    function checkHashForPage() { /* [cite: 135] */
+        const hash = window.location.hash; /* [cite: 135] */
+        if (hash.startsWith('#page=')) { /* [cite: 136] */
+            const page = parseInt(hash.split('=')[1]); /* [cite: 136] */
+            if (!isNaN(page) && page >= 1 && page <= totalPages) { /* [cite: 137] */
+                currentPage = page; /* [cite: 137] */
+                queueRenderPage(page); /* [cite: 138] */
+            }
+        }
+    }
+    
+    window.addEventListener('hashchange', checkHashForPage); /* [cite: 139] */
+    window.addEventListener('load', checkHashForPage); /* [cite: 139] */
+</script>
+{% endblock %}

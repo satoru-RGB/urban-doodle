@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h4>{{ _('絵本を追加') }}</h4> </div>
+            <div class="card-body">
+                <form method="POST" action="" enctype="multipart/form-data">
+                    {{ form.hidden_tag() }}
+                    <div class="mb-3">
+                        {{ form.title.label(class="form-label", text=_('タイトル')) }} {{ form.title(class="form-control") }}
+                        {% for error in form.title.errors %}
+                        <div class="text-danger">{{ error }}</div> {% endfor %}
+                    </div>
+                    <div class="mb-3">
+                        {{ form.tags.label(class="form-label", text=_('タグ（カンマ区切り）')) }} {{ form.tags(class="form-control") }}
+                        <div class="form-text">{{ _('カンマ区切りでタグを入力してください（例: 動物,冒険,3歳向け）') }}</div> </div>
+                    <div class="mb-3">
+                        {{ form.pdf_file.label(class="form-label", text=_('PDFファイル')) }} {{ form.pdf_file(class="form-control") }}
+                        {% for error in form.pdf_file.errors %}
+                        <div class="text-danger">{{ error }}</div> {% endfor %}
+                    </div>
+                    <div class="mb-3">
+                        {{ form.cover_file.label(class="form-label", text=_('カバー画像（任意）')) }} {{ form.cover_file(class="form-control") }}
+                        <div class="form-text">{{ _('カバー画像を指定しない場合、PDFの最初のページから自動生成されます。') }}</div>
+                        {% for error in form.cover_file.errors %}
+                        <div class="text-danger">{{ error }}</div> {% endfor %}
+                    </div>
+                    <div class="d-flex justify-content-between">
+                        <a href="{{ url_for('admin.books') }}" class="btn btn-secondary">{{ _('キャンセル') }}</a> {{ form.submit(class="btn btn-primary", value=_('追加')) }}
+                    </div>
+                </form>
+            </div>
+        </div> </div>
+</div>
+{% endblock %}

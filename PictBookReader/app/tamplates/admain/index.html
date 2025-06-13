@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1>{{ _('管理パネル') }}</h1>
+
+<div class="row mt-4">
+    <div class="col-md-6 mb-4">
+        <div class="card h-100">
+            <div class="card-body">
+                <h5 class="card-title">{{ _('ユーザー管理') }}</h5>
+                <p class="card-text">{{ _('ユーザーの追加、編集、削除を行います。') }}</p>
+                <a href="{{ url_for('admin.users') }}" class="btn btn-primary">{{ _('ユーザー管理へ') }}</a>
+            </div> </div>
+    </div>
+    
+    <div class="col-md-6 mb-4">
+        <div class="card h-100">
+            <div class="card-body">
+                <h5 class="card-title">{{ _('絵本管理') }}</h5>
+                <p class="card-text">{{ _('絵本の追加、編集、削除を行います。') }}</p>
+                <a href="{{ url_for('admin.books') }}" class="btn btn-primary">{{ _('絵本管理へ') }}</a> </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
